@@ -10,11 +10,12 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import java.util.Date;
 
 /**
- * Created by akaroice on 2015-03-27.
+ *
+ * @author akaroice
  */
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration("classpath:applicationContext-collector-test.xml")
-public class AgentInfoHbaseIntegrationTest {
+public class AgentInfoHbaseIT {
     @Autowired
     private HbaseAgentInfoDao hbaseAgentInfoDao;
 

@@ -32,7 +32,7 @@
     <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
         <property name="locations">
             <list>
-                <value>classpath:test-hbase.properties</value>
+                <value>classpath:hbase-test.properties</value>
                 <!-- 
                 <value>classpath:jdbc.properties</value>
                 -->
@@ -46,7 +46,7 @@
     <util:properties id="dataProps" location="classpath:data.properties"/>
     -->
 
-    <import resource="classpath:applicationContext-hbase.xml" />
+    <import resource="classpath:applicationContext-hbase-test.xml" />
 
     <!-- 
     <import resource="classpath:applicationContext-datasource.xml" />
