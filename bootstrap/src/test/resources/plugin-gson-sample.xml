@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<plugin id="Gson-Plugin">
+
+    <interceptor id="alias" class="TomcatStandardHostValve" >
+
+    </interceptor>
+
+    <!-- 나중에 선언형으로도 interceptor의  고도화 가능할것으로 보임.-->
+    <!-- example -->
+    <interceptor class="TomcatStanardHostVal" template="acceptTemplate">
+        <capture-header target="#getHeader('Header.HTTP_TRACE_ID')"/>
+    </interceptor>
+    <interceptor-factory>
+        <interceptor class="xxx">
+
+        </interceptor>
+    </interceptor-factory>
+
+    <!-- 그룹핑할 element명??.. -->
+    <!-- transactional : 이건 나중에 만들어서 구현하면 되지 않을까?  -->
+    <transform scope="GSON_SCOPE optional" transactional="나중에 트랜잭션을 걸어서 처리 가능하지 않을까?">
+
+        <!-- 매칭 전략을 구현할수 있게 해야 되나? 현재는 안되므로, matcher attribute는 나중에 추가해도 될듯.현재는 className.equeals()만 지원하도록 제약한다. -->
+        <!-- mcatcher의 내부 구현은 먼저 class를 보고 이조건이 통과되면 method를 보는 순으로 해야 될듯함. -->
+        <class name="com.google.gson.GsonSample" matcher="@Trace annotation found ?? 이건 어떻게 구현해야 하나?"/>
+
+        <class name="com.google.gson.Gson" matcher="className.equals()">
+            <!-- constructor를 별도로 분리해야 되나? 아니면 method에 <init>로 해야 하나? -->
+            <constructor>
+
+            </constructor>
+
+            <!-- inteceptor: interceptor class를 명하는건 그렇다 치는데, 이걸 어떻게 instance화 시키나? plugin 에 있는 factory를 사용해서 생성자 파라마티는 자동 바인딩하면 되나?  -->
+            <method name="fromJson" modifier="public|private|package|static|BRIDGE|SYNTHETIC" scope="GSON_SCOPE overwrite value ?">
+                <args>
+                     <arg type="java.lang.String"/>
+                     <arg type="int"/>
+                     <arg type="long"/>
+                </args>
+                <inteceptor class="com.navercorp.pinpoint.plugin.gson.interceptor.FromJsonInterceptor"/>
+            </method>
+
+            <method name="fromJson" modifier="public|private|package|static|BRIDGE|SYNTHETIC" scope="GSON_SCOPE overwrite value ?">
+                <args>
+                    <arg type="java.lang.String"/>
+                    <arg type="int"/>
+                    <arg type="long"/>
+                </args>
+                <inteceptor class="com.navercorp.pinpoint.plugin.gson.interceptor.FromJsonInterceptor"/>
+            </method>
+
+
+            <!-- visibility에 !연산은 지원되어야 될듯하다. !private -->
+            <method name="fromJson"  visibility="public | private  | package | protected" modifier="static|BRIDGE|SYNTHETIC">
+                <!-- args로 한번 묵어야 되나.말아야 되나? args로 묶을 경우 args로 matcher등의 attribute를 넣을수 있을거 같다.
+                    이런데 이게 좀 애매한게. method matcher에서 다 판단하는게 더 맞는것 같지. 구지 별도로 다시 판단을 해야 되는건지가 애매하다.
+                -->
+                <args>
+                    <arg type="java.lang.String"/>
+                    <arg type="int"/>
+                    <arg type="long"/>
+                </args>
+            </method>
+
+            <method name="fromJson" inteceptor="FromJsonInterceptor" visibility="public|private|protected|package" modifier="static|BRIDGE|SYNTHETIC" >
+                <args>
+                    <arg type="java.lang.String"/>
+                </args>
+            </method>
+
+            <method name="fromJson" matcher="equals or regex" inteceptor="FromJsonInterceptor" visibility="public|private|protected|package" modifier="" >
+                <!-- 그런데 args matcher가 별도로 들어가야 되는게 맞는것인가? -->
+                <args matcher="all"/>
+                <args matcher-ref="com.navercorp.pinpoint.bootstrap.instrument.MethodFilters"/>
+            </method>
+
+
+            <!-- factory나, alise의 적용이 가능해야 될듯한데.이건 불편함 감소의 역활뿐이므로 천천히 해도 될듯하다..-->
+            <method name="fromJson" inteceptor-ref="FactoryInterceptor" visibility="public" scope="GSON_SCOPE"/>
+
+            <!--method overwrite하는건 -->
+            <method name="toJson" inteceptor="com.navercorp.pinpoint.plugin.gson.interceptor.FromJsonInterceptor" scope="GSON_SCOPE" delegating="true"/>
+        </class>
+    </transform>
+
+
+</plugin>
