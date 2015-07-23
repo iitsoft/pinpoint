@@ -26,7 +26,6 @@ import com.navercorp.pinpoint.bootstrap.interceptor.http.HttpCallContext;
 import com.navercorp.pinpoint.bootstrap.logging.PLogger;
 import com.navercorp.pinpoint.bootstrap.logging.PLoggerFactory;
 import com.navercorp.pinpoint.bootstrap.plugin.annotation.Group;
-import com.navercorp.pinpoint.common.trace.ServiceType;
 import com.navercorp.pinpoint.plugin.httpclient4.HttpClient4Constants;
 
 import org.apache.http.*;
@@ -96,9 +95,10 @@ public class HttpClientExecuteMethodInternalInterceptor implements SimpleAroundI
             return false;
         }
 
-        if (trace.getServiceType() != ServiceType.HTTP_CLIENT.getCode()) {
-            return false;
-        }
+        // TODO fix me.
+//        if (trace.getServiceType() != ServiceType.HTTP_CLIENT.getCode()) {
+//            return false;
+//        }
 
         InterceptorGroupInvocation transaction = interceptorGroup.getCurrentInvocation();
         if (transaction.getAttachment() != null) {

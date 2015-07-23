@@ -1,6 +1,12 @@
 (function() {
 	'use strict';
-	
+	/**
+	 * (en)ServerMapDaoService 
+	 * @ko ServerMapDaoService
+	 * @group Service
+	 * @name ServerMapDaoService
+	 * @class
+	 */
 	pinpointApp.constant('serverMapDaoServiceConfig', {
 	    serverMapDataUrl: '/getServerMapData.pinpoint',
 	    filteredServerMapDataUrl: '/getFilteredServerMapData.pinpoint',
@@ -26,8 +32,8 @@
 	            applicationName: query.applicationName,
 	            from: query.from,
 	            to: query.to,
-	            callerRange: query.callerRange || 7,
-	            calleeRange: query.calleeRange || 7
+	            callerRange: query.callerRange,
+	            calleeRange: query.calleeRange
 	        };
 	    	if ( isNaN( parseInt( query.serviceTypeName ) ) ) {
 	    		data.serviceTypeName = query.serviceTypeName; 

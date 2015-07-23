@@ -1,6 +1,12 @@
 (function() {
 	'use strict';
-	
+	/**
+	 * (en)scatterDirective 
+	 * @ko scatterDirective
+	 * @group Directive
+	 * @name scatterDirective
+	 * @class
+	 */
 	pinpointApp.constant('scatterDirectiveConfig', {
 	    get: {
 	        scatterData: '/getScatterData.pinpoint',
@@ -94,7 +100,7 @@
                             sUrl: function (nFetchIndex) {
                                 return cfg.get.scatterData;
                             },
-                            htParam: function (nFetchIndex, htLastFetchParam, htLastFetchedData) {
+                            htParam: function (nFetchIndex, htLastFetchedData) {
                                 // calculate parameter
                                 var htData;
                                 if (nFetchIndex === 0) {
@@ -122,7 +128,7 @@
 
                                 return htData;
                             },
-                            nFetch: function (htLastFetchParam, htLastFetchedData) {
+                            nFetch: function (htLastFetchedData) {
                                 // -1 : stop, n = 0 : immediately, n > 0 : interval
                                 if (htLastFetchedData.resultFrom - 1 > from) {
                                     if (cfg.useIntervalForFetching) {
@@ -173,6 +179,7 @@
 //                        }
 
                         var options = angular.copy(cfg.options);
+                        options.sPrefix = "bigscatterchart-" + parseInt( Math.random() * 100000 ) + "-";
                         options.sContainerId = target;
                         options.nWidth = w ? w : 400;
                         options.nHeight = h ? h : 250;
@@ -227,7 +234,7 @@
                         };
 
                         var oScatterChart = null;
-                        oScatterChart = new BigScatterChart(options, helpContentTemplate, helpContentService);
+                        oScatterChart = new BigScatterChart(options, helpContentTemplate, helpContentService, webStorage);
                         $timeout(function () {
                             if (angular.isUndefined(scatterData)) {
                                 oScatterChart.drawWithDataSource(getDataSource(title, start, end, filter));

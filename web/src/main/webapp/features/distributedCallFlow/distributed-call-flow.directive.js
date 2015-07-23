@@ -1,6 +1,12 @@
 (function() {
 	'use strict';
-	
+	/**
+	 * (en)distributedCallFlowDirective 
+	 * @ko distributedCallFlowDirective
+	 * @group Directive
+	 * @name distributedCallFlowDirective
+	 * @class
+	 */	
 	pinpointApp.directive('distributedCallFlowDirective', [ '$filter', '$timeout',
 	    function ($filter, $timeout) {
 	        return {
@@ -298,10 +304,6 @@
 		                    {id: "agent", name: "Agent", field: "agent", width: 130},
 		                    {id: "application-name", name: "Application", field: "applicationName", width: 150}
 	                    ];
-	                  
-	                    if (t.logLinkEnable) {
-	                    	columns.push({id: "Loglink", name: "log", field: "logLink", width: 50, formatter:linkFormatter});
-	                    }
 	                    
 	                    grid = new Slick.Grid(element.get(0), dataView, columns, options);
 	                    grid.setSelectionModel(new Slick.RowSelectionModel());
@@ -424,13 +426,13 @@
 	                	if ( row == -1 ) {
 	                		if ( index > 0 ) {
 	                			selectRow( searchRowByTime(time, 0) );
-	                			scope.$emit("transactionDetail.searchCallresult", "Loop" );
+	                			scope.$emit("transactionDetail.calltreeSearchCallResult", "Loop" );
 	                		} else {
-	                			scope.$emit("transactionDetail.searchCallresult", "No call took longer than {time}ms." );
+	                			scope.$emit("transactionDetail.calltreeSearchCallResult", "No call took longer than {time}ms." );
 	                		}
 	                	} else {
 	                		selectRow(row);
-	                		scope.$emit("transactionDetail.searchCallresult", "" );
+	                		scope.$emit("transactionDetail.calltreeSearchCallResult", "" );
 	                	}
 	            	});
 	                searchRowByTime = function( time, index ) {

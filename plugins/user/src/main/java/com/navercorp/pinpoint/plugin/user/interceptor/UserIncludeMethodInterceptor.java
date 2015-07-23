@@ -16,8 +16,11 @@
 
 package com.navercorp.pinpoint.plugin.user.interceptor;
 
+import com.navercorp.pinpoint.bootstrap.context.SpanEventRecorder;
+import com.navercorp.pinpoint.bootstrap.context.SpanRecorder;
 import com.navercorp.pinpoint.bootstrap.context.Trace;
 import com.navercorp.pinpoint.bootstrap.context.TraceContext;
+import com.navercorp.pinpoint.bootstrap.context.TraceType;
 import com.navercorp.pinpoint.bootstrap.interceptor.MethodDescriptor;
 import com.navercorp.pinpoint.bootstrap.interceptor.SimpleAroundInterceptor;
 import com.navercorp.pinpoint.bootstrap.logging.PLogger;
@@ -61,18 +64,17 @@ public class UserIncludeMethodInterceptor implements SimpleAroundInterceptor {
             if(isDebug) {
                 logger.debug("New trace and sampled {}", trace);
             }
-            recordRootSpan(trace);
+            SpanRecorder recorder = trace.getSpanRecorder();
+            recordRootSpan(recorder);
         }
 
         trace.traceBlockBegin();
-        trace.markBeforeTime();
     }
 
-    private void recordRootSpan(final Trace trace) {
+    private void recordRootSpan(final SpanRecorder recorder) {
         // root
-        trace.markBeforeTime();
-        trace.recordServiceType(ServiceType.STAND_ALONE);
-        trace.recordApi(USER_INCLUDE_METHOD_DESCRIPTOR);
+        recorder.recordServiceType(ServiceType.STAND_ALONE);
+        recorder.recordApi(USER_INCLUDE_METHOD_DESCRIPTOR);
     }
 
     @Override
@@ -87,14 +89,13 @@ public class UserIncludeMethodInterceptor implements SimpleAroundInterceptor {
         }
 
         try {
-            trace.recordApi(descriptor);
-            trace.recordServiceType(ServiceType.USER_INCLUDE);
-            trace.recordException(throwable);
-            trace.markAfterTime();
+            SpanEventRecorder recorder = trace.currentSpanEventRecorder();
+            recorder.recordApi(descriptor);
+            recorder.recordServiceType(ServiceType.USER_INCLUDE);
+            recorder.recordException(throwable);
         } finally {
             trace.traceBlockEnd();
-            if(trace.isRootStack()) {
-                trace.markAfterTime();
+            if(trace.getTraceType() == TraceType.USER && trace.isRootStack()) {
                 trace.close();
                 traceContext.removeTraceObject();
             }

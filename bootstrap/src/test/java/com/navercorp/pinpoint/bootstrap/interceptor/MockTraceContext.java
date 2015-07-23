@@ -25,6 +25,7 @@ import com.navercorp.pinpoint.common.util.ParsingResult;
 /**
  * @author emeroad
  * @author hyungil.jeong
+ * @author Taejin Koo
  */
 public class MockTraceContext implements TraceContext {
 
@@ -59,7 +60,11 @@ public class MockTraceContext implements TraceContext {
     public Trace newTraceObject() {
         return trace;
     }
-
+    
+    @Override
+    public Trace newTraceObject(TraceType traceType) {
+        return trace;
+    }
 
     @Override
     public String getAgentId() {
@@ -129,31 +134,6 @@ public class MockTraceContext implements TraceContext {
     @Override
     public ProfilerConfig getProfilerConfig() {
         return null;
-    }
-
-    @Override
-    public Metric getRpcMetric(ServiceType serviceType) {
-        return null;
-    }
-
-    @Override
-    public void recordContextMetricIsError() {
-
-    }
-
-    @Override
-    public void recordContextMetric(int elapsedTime) {
-
-    }
-
-    @Override
-    public void recordAcceptResponseTime(String parentApplicationName, short parentApplicationType, int elapsedTime) {
-
-    }
-
-    @Override
-    public void recordUserAcceptResponseTime(int elapsedTime) {
-
     }
 
     @Override

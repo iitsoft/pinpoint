@@ -16,6 +16,7 @@
 
 package com.navercorp.pinpoint.profiler.context;
 
+import com.navercorp.pinpoint.bootstrap.context.FrameAttachment;
 import com.navercorp.pinpoint.bootstrap.context.SpanId;
 import com.navercorp.pinpoint.bootstrap.context.TraceId;
 import com.navercorp.pinpoint.common.util.TransactionIdUtils;
@@ -28,7 +29,10 @@ import com.navercorp.pinpoint.thrift.dto.TSpan;
  * @author netspider
  * @author emeroad
  */
-public class Span extends TSpan {
+public class Span extends TSpan implements FrameAttachment {
+    private boolean timeRecording = true;
+    private Object frameObject;
+    
     public Span() {
     }
 
@@ -61,9 +65,6 @@ public class Span extends TSpan {
     }
 
     public void markAfterTime() {
-        if (!isSetStartTime()) {
-            throw new PinpointTraceException("startTime is not set");
-        }
         final int after = (int)(System.currentTimeMillis() - this.getStartTime());
 
         // TODO  have to change int to long
@@ -73,9 +74,6 @@ public class Span extends TSpan {
     }
 
     public long getAfterTime() {
-        if (!isSetStartTime()) {
-            throw new PinpointTraceException("startTime is not set");
-        }
         return this.getStartTime() + this.getElapsed();
     }
 
@@ -104,5 +102,30 @@ public class Span extends TSpan {
         super.setErr(exception);
     }
 
+    public boolean isTimeRecording() {
+        return timeRecording;
+    }
 
+    public void setTimeRecording(boolean timeRecording) {
+        this.timeRecording = timeRecording;
+    }
+
+    @Override
+    public Object attachFrameObject(Object attachObject) {
+        final Object before = this.frameObject;
+        this.frameObject = attachObject;
+        return before;
+    }
+
+    @Override
+    public Object getFrameObject() {
+        return this.frameObject;
+    }
+
+    @Override
+    public Object detachFrameObject() {
+        final Object delete = this.frameObject;
+        this.frameObject = null;
+        return delete;
+    }
 }

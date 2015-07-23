@@ -16,7 +16,7 @@ var BigScatterChart = $.Class({
 	 * @param {Object} option option object
 	 * @param {Service} helpContentService angularjs service object
 	 */			
-    $init: function (htOption, helpContentTemplate, helpContentService) {
+    $init: function (htOption, helpContentTemplate, helpContentService, webStorage) {
         this.option({
             'sContainerId': '',
             'sPrefix': 'bigscatterchart-',
@@ -111,6 +111,7 @@ var BigScatterChart = $.Class({
             'fFullScreenMode' : function () {
             }
         });
+        this.webStorage = webStorage;
         this.option(htOption);
 
         this._initVariables();
@@ -163,8 +164,8 @@ var BigScatterChart = $.Class({
         this._nXMax = this.option('nXMax');
         this._nXMin = this.option('nXMin');
 
-        this._nYMax = this.option('nYMax');
-        this._nYMin = this.option('nYMin');
+        this._nYMax = this.webStorage.get("scatter-y-max") || this.option('nYMax');
+        this._nYMin = this.webStorage.get("scatter-y-min") || this.option('nYMin');
 
         this._nZMax = this.option('nZMax');
         this._nZMin = this.option('nZMin');
@@ -177,6 +178,7 @@ var BigScatterChart = $.Class({
         this._bDestroied = false;
 
         this._bPause = false;
+        this._bRequesting = false;
     },
 
     _initElements: function () {
@@ -610,6 +612,9 @@ var BigScatterChart = $.Class({
                 alert('Min of Y axis is should be smaller than ' + nYMax);
                 return;
             }
+            self.webStorage.add( "scatter-y-min", nYMin );
+            self.webStorage.add( "scatter-y-max", nYMax );
+
             self.option('nYMin', nYMin);
             self.option('nYMax', nYMax);
             fConfigToggle();
@@ -1651,16 +1656,23 @@ var BigScatterChart = $.Class({
         var self = this;
         var htDataSource = this.option('htDataSource');
 
-        if (this._bPause) {
+        if (this._bPause || this._bRequesting) {
             return;
         }
 
+        if (this._nCallCount === 0) {
+            this._welShowNoData.text(this.option('sShowLoading'));
+        }
         var htOption = htDataSource.htOption;
 
         htOption.context = this;
         htOption.url = htDataSource.sUrl.call(this, this._nCallCount);
-        htOption.data = htDataSource.htParam.call(this, this._nCallCount, this._htLastFechedParam, this._htLastFetchedData);
+        htOption.data = htDataSource.htParam.call(this, this._nCallCount, this._htLastFetchedData);
+        htOption.complete = function() {
+        	self._bRequesting = false;
+        };
         htOption.success = function (htData) {
+        	self._nCallCount += 1;
             self._hideNoData();
             if (htData.scatter.length > 0) {
                 self.addBubbleAndMoveAndDraw(htData.scatter, htData.resultFrom);
@@ -1680,7 +1692,7 @@ var BigScatterChart = $.Class({
              ], self._nXMax + 1000)
              }*/
 //            htDataSource = self.option('htDataSource'); // refresh
-            var nInterval = htDataSource.nFetch.call(self, self._htLastFechedParam, htData);
+            var nInterval = htDataSource.nFetch.call(self, htData);
             if (nInterval > -1) {
                 setTimeout(function () {
                     self._drawWithDataSource();
@@ -1691,11 +1703,7 @@ var BigScatterChart = $.Class({
             }
         };
         this._oAjax = $.ajax(htOption);
-        if (this._nCallCount === 0) {
-            this._welShowNoData.text(this.option('sShowLoading'));
-        }
-        this._nCallCount += 1;
-        this._htLastFechedParam = htOption.data;
+        this._bRequesting = true; 
     },
 
     _abortAjax: function () {

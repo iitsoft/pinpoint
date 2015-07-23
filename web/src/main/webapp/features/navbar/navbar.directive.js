@@ -1,6 +1,12 @@
 (function() {
 	'use strict';
-	
+	/**
+	 * (en)navbarDirective 
+	 * @ko navbarDirective
+	 * @group Directive
+	 * @name navbarDirective
+	 * @class
+	 */	
 	pinpointApp.constant('cfg', {
 	    applicationUrl: '/applications.pinpoint',
 	    serverTimeUrl: '/serverTime.pinpoint',
@@ -30,11 +36,7 @@
 	                 * getRangeFromStorage
 	                 */
 	                getRangeFromStorage = function(app) {
-	                	if ( window.localStorage ) {
-	                		return window.localStorage.getItem( app ) || DEFAULT_RANGE;
-	                	} else {
-	                		return DEFAULT_RANGE;
-	                	}
+                		return webStorage.get( app ) || DEFAULT_RANGE;
 	                };
 	                /**
 	                 * setRangeToStorage
@@ -43,9 +45,7 @@
 	                	if (angular.isUndefined(app) || app == null || angular.isUndefined(range) || range == null) {
 	                		return;
 	                	}
-	                	if ( window.localStorage ) {
-	                		window.localStorage.setItem(app, range);
-	                	}
+	                	webStorage.add(app, range);
 	                };
 	                scope.showNavbar = false;
 	                scope.periodDelay = false;
@@ -154,10 +154,13 @@
 	                    $fromPicker.datetimepicker({
 	                        dateFormat: "yy-mm-dd",
 	                        timeFormat: "HH:mm",
+	                        controlType: "select",
 	                        onSelect: function () {
-	                            if (getDate($fromPicker).isBefore(getDate($toPicker).add(-2).days()) || getDate($fromPicker).isAfter(getDate($toPicker))) {
-	                                setDateTime($toPicker, getDate($fromPicker).add(2).days());
-	                            }
+	                        	var momentFrom = moment(getDate($fromPicker));
+	                        	var momentTo = moment(getDate($toPicker));
+	                        	if ( momentFrom.isBefore(momentTo.subtract(2, "days")) || momentFrom.isAfter(momentTo) ) {
+	                        		setDateTime($toPicker, momentFrom.add(2, "days").format());
+	                        	}
 	                        },
 	                        onClose: function (currentTime, oTime) {
 	                            if ($toPicker.val() !== '') {
@@ -175,10 +178,13 @@
 	                    $toPicker.datetimepicker({
 	                        dateFormat: "yy-mm-dd",
 	                        timeFormat: "HH:mm",
+	                        controlType: "select",
 	                        onSelect: function () {
-	                            if (getDate($fromPicker).isBefore(getDate($toPicker).add(-2).days()) || getDate($fromPicker).isAfter(getDate($toPicker))) {
-	                                setDateTime($fromPicker, getDate($toPicker).add(-2).days());
-	                            }
+	                        	var momentFrom = moment(getDate($fromPicker));
+	                        	var momentTo = moment(getDate($toPicker));
+	                        	if ( momentFrom.isBefore(momentTo.subtract(2, "days")) || momentFrom.isAfter(momentTo) ) {
+	                        		setDateTime($fromPicker, momentTo.subtract(2, "days").format());
+	                        	}
 	                        },
 	                        onClose: function (currentTime, oTime) {
 	                            if ($fromPicker.val() !== '') {
@@ -204,8 +210,8 @@
 	                 */
 	                getPeriodType = function () {
 	                    var periodType;
-	                    if ($window.name && webStorage.session.get($window.name + cfg.periodTypePrefix)) {
-	                        periodType = webStorage.session.get($window.name + cfg.periodTypePrefix);
+	                    if ($window.name && webStorage.get($window.name + cfg.periodTypePrefix)) {
+	                        periodType = webStorage.get($window.name + cfg.periodTypePrefix);
 	                    } else {
 	                        periodType = oNavbarVoService.getApplication() ? 'range' : 'last';
 	                    }
@@ -217,7 +223,7 @@
 	
 	                setPeriodTypeAsCurrent = function () {
 	                    $window.name = $window.name || 'window.' + _.random(100000, 999999);
-	                    webStorage.session.add($window.name + cfg.periodTypePrefix, scope.periodType);
+	                    webStorage.add($window.name + cfg.periodTypePrefix, scope.periodType);
 	                };
 	
 	                /**
@@ -373,6 +379,7 @@
 	
 	                    $application.select2({
 	                        placeholder: "Select an application.",
+	                        searchInputPlaceholder: "Input your application name.",
 	                        allowClear: false,
 	                        formatResult: formatOptionText,
 	                        formatSelection: formatOptionText,
@@ -387,6 +394,7 @@
 	                        // ref1 : http://jimhoskins.com/2012/12/17/angularjs-and-apply.html
 	                        // ref2 : http://jsfiddle.net/CDvGy/2/
 	                    });
+	                    console.log( $application.select2 );
 	                };
 	                getMilliSecondByReadablePeriod = function( period ) {
 	                	var time = parseInt( period );

@@ -55,7 +55,6 @@ public class RequestRecycleInterceptor implements SimpleAroundInterceptor, Tomca
                 final Trace trace = traceAccessor.get(target);
                 if (trace != null && trace.canSampled()) {
                     // end of root span
-                    trace.markAfterTime();
                     trace.close();
                 }
                 // reset

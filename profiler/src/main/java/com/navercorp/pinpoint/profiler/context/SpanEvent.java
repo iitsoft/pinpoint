@@ -16,6 +16,7 @@
 
 package com.navercorp.pinpoint.profiler.context;
 
+import com.navercorp.pinpoint.bootstrap.context.FrameAttachment;
 import com.navercorp.pinpoint.thrift.dto.TIntStringValue;
 import com.navercorp.pinpoint.thrift.dto.TSpanEvent;
 
@@ -25,9 +26,12 @@ import com.navercorp.pinpoint.thrift.dto.TSpanEvent;
  * @author netspider
  * @author emeroad
  */
-public class SpanEvent extends TSpanEvent {
+public class SpanEvent extends TSpanEvent implements FrameAttachment {
 
     private final Span span;
+    private int stackId;
+    private boolean timeRecording = true;
+    private Object frameObject;
 
     public SpanEvent(Span span) {
         if (span == null) {
@@ -67,9 +71,6 @@ public class SpanEvent extends TSpanEvent {
     }
 
     public void markAfterTime() {
-        if (!isSetStartElapsed()) {
-            throw new PinpointTraceException("startTime is not set");
-        }
         final int endElapsed = (int)(System.currentTimeMillis() - getStartTime());
         if (endElapsed != 0) {
             this.setEndElapsed(endElapsed);
@@ -77,11 +78,41 @@ public class SpanEvent extends TSpanEvent {
     }
 
     public long getAfterTime() {
-        if (!isSetStartElapsed()) {
-            throw new PinpointTraceException("startTime is not set");
-        }
         return span.getStartTime() + getStartElapsed() + getEndElapsed();
     }
 
+    public int getStackId() {
+        return stackId;
+    }
 
+    public void setStackId(int stackId) {
+        this.stackId = stackId;
+    }
+
+    public boolean isTimeRecording() {
+        return timeRecording;
+    }
+
+    public void setTimeRecording(boolean timeRecording) {
+        this.timeRecording = timeRecording;
+    }
+
+    @Override
+    public Object attachFrameObject(Object attachObject) {
+        final Object before = this.frameObject;
+        this.frameObject = attachObject;
+        return before;
+    }
+
+    @Override
+    public Object getFrameObject() {
+        return this.frameObject;
+    }
+
+    @Override
+    public Object detachFrameObject() {
+        final Object delete = this.frameObject;
+        this.frameObject = null;
+        return delete;
+    }
 }

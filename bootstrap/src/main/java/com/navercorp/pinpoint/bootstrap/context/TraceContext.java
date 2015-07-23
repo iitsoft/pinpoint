@@ -24,6 +24,7 @@ import com.navercorp.pinpoint.common.util.ParsingResult;
 /**
  * @author emeroad
  * @author hyungil.jeong
+ * @author Taejin Koo
  */
 public interface TraceContext {
 
@@ -40,6 +41,8 @@ public interface TraceContext {
     Trace continueTraceObject(Trace trace);
 
     Trace newTraceObject();
+    
+    Trace newTraceObject(TraceType traceType);
     
     Trace continueAsyncTraceObject(AsyncTraceId traceId, int asyncId, long startTime);
 
@@ -76,16 +79,7 @@ public interface TraceContext {
 
     ProfilerConfig getProfilerConfig();
 
-    Metric getRpcMetric(ServiceType serviceType);
 
-    void recordContextMetricIsError();
-
-    void recordContextMetric(int elapsedTime);
-
-    void recordAcceptResponseTime(String parentApplicationName, short parentApplicationType, int elapsedTime);
-
-    void recordUserAcceptResponseTime(int elapsedTime);
-    
     ServerMetaDataHolder getServerMetaDataHolder();
 
     int getAsyncId();

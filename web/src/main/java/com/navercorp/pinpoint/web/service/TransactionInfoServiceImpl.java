@@ -27,6 +27,7 @@ import com.navercorp.pinpoint.common.bo.SpanEventBo;
 import com.navercorp.pinpoint.common.service.AnnotationKeyRegistryService;
 import com.navercorp.pinpoint.common.service.ServiceTypeRegistryService;
 import com.navercorp.pinpoint.common.trace.AnnotationKeyMatcher;
+import com.navercorp.pinpoint.common.trace.LoggingInfo;
 import com.navercorp.pinpoint.web.calltree.span.CallTreeIterator;
 import com.navercorp.pinpoint.web.calltree.span.CallTreeNode;
 import com.navercorp.pinpoint.web.calltree.span.SpanAlign;
@@ -146,6 +147,8 @@ public class TransactionInfoServiceImpl implements TransactionInfoService {
         // find the endTime to use as reference
         long endTime = getEndTime(spanAlignList);
         recordSet.setEndTime(endTime);
+        
+        recordSet.setLoggingTransactionInfo(findIsLoggingTransactionInfo(spanAlignList));
 
         final SpanAlignPopulate spanAlignPopulate = new SpanAlignPopulate();
         List<Record> recordList = spanAlignPopulate.populateSpanRecord(callTreeIterator);
@@ -160,11 +163,19 @@ public class TransactionInfoServiceImpl implements TransactionInfoService {
 
         recordSet.setRecordList(recordList);
 
-        // if (logLinkEnable) {
-        // addlogLink(recordSet);
-        // }
-
         return recordSet;
+    }
+
+    private boolean findIsLoggingTransactionInfo(List<SpanAlign> spanAlignList) {
+        for (SpanAlign spanAlign : spanAlignList) {
+            if (spanAlign.isSpan()) {
+                if (spanAlign.getSpanBo().getLoggingTransactionInfo() == LoggingInfo.LOGGED.getCode()) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
 
     private void markFocusRecord(List<Record> recordList, long beginTimeStamp) {

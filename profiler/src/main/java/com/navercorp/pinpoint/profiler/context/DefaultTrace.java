@@ -20,33 +20,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.navercorp.pinpoint.bootstrap.context.AsyncTraceId;
+import com.navercorp.pinpoint.bootstrap.context.SpanEventRecorder;
+import com.navercorp.pinpoint.bootstrap.context.SpanRecorder;
 import com.navercorp.pinpoint.bootstrap.context.Trace;
 import com.navercorp.pinpoint.bootstrap.context.TraceContext;
 import com.navercorp.pinpoint.bootstrap.context.TraceId;
-import com.navercorp.pinpoint.bootstrap.interceptor.MethodDescriptor;
-import com.navercorp.pinpoint.bootstrap.util.StringUtils;
-import com.navercorp.pinpoint.common.trace.AnnotationKey;
-import com.navercorp.pinpoint.common.trace.HistogramSchema;
-import com.navercorp.pinpoint.common.trace.ServiceType;
-import com.navercorp.pinpoint.common.util.ParsingResult;
+import com.navercorp.pinpoint.bootstrap.context.TraceType;
 import com.navercorp.pinpoint.exception.PinpointException;
 import com.navercorp.pinpoint.profiler.context.storage.Storage;
-import com.navercorp.pinpoint.thrift.dto.TIntStringStringValue;
-
 
 /**
  * @author netspider
  * @author emeroad
+ * @author jaehong.kim
  */
 public final class DefaultTrace implements Trace {
-
     private static final Logger logger = LoggerFactory.getLogger(DefaultTrace.class.getName());
-    private static final boolean isDebug = logger.isDebugEnabled();
     private static final boolean isTrace = logger.isTraceEnabled();
+    private static final boolean isWarn = logger.isWarnEnabled();
 
-    private short sequence;
-
-    private boolean sampling = true;
+    private final boolean sampling;
 
     private final TraceId traceId;
 
@@ -55,42 +48,35 @@ public final class DefaultTrace implements Trace {
     private Storage storage;
 
     private final TraceContext traceContext;
-
-    // use for calculating depth of each Span.
-    private int latestStackIndex = -1;
-    private StackFrame currentStackFrame;
+    private TraceType traceType = TraceType.DEFAULT;
+    private final WrappedSpanEventRecorder spanEventRecorder;
+    private final DefaultSpanRecorder spanRecorder;
     private boolean closed = false;
 
-    public DefaultTrace(final TraceContext traceContext, long transactionId) {
+    private Thread bindThread;
+
+    public DefaultTrace(final TraceContext traceContext, long transactionId, boolean sampling) {
         if (traceContext == null) {
             throw new NullPointerException("traceContext must not be null");
         }
         this.traceContext = traceContext;
         this.traceId = new DefaultTraceId(traceContext.getAgentId(), traceContext.getAgentStartTime(), transactionId);
-        this.traceId.incrementTraceCount();
-        
-        final Span span = createSpan(traceId);
-        this.callStack = new CallStack(span);
-        this.latestStackIndex = this.callStack.push();
+        this.sampling = sampling;
 
-        final StackFrame stackFrame = createSpanStackFrame(ROOT_STACKID, callStack.getSpan());
-        this.callStack.setStackFrame(stackFrame);
-        this.currentStackFrame = stackFrame;
+        final Span span = createSpan();
+        this.spanRecorder = new DefaultSpanRecorder(traceContext, span, traceId, sampling);
+        this.spanRecorder.recordTraceId(traceId);
+        this.spanEventRecorder = new WrappedSpanEventRecorder(traceContext);
+        if (traceContext.getProfilerConfig() != null) {
+            final int maxCallStackDepth = traceContext.getProfilerConfig().getCallStackMaxDepth();
+            this.callStack = new CallStack(span, maxCallStackDepth);
+        } else {
+            this.callStack = new CallStack(span);
+        }
+        setCurrentThread();
     }
 
-    private Span createSpan(final TraceId traceId) {
-        final Span span = new Span();
-        span.setAgentId(traceContext.getAgentId());
-        span.setApplicationName(traceContext.getApplicationName());
-        span.setAgentStartTime(traceContext.getAgentStartTime());
-        span.setApplicationServiceType(traceContext.getServerTypeCode());
-
-        // have to recode traceId latter.
-        span.recordTraceId(traceId);
-        return span;
-    }
-
-    public DefaultTrace(TraceContext traceContext, TraceId continueTraceId) {
+    public DefaultTrace(TraceContext traceContext, TraceId continueTraceId, boolean sampling) {
         if (traceContext == null) {
             throw new NullPointerException("traceContext must not be null");
         }
@@ -99,111 +85,59 @@ public final class DefaultTrace implements Trace {
         }
         this.traceContext = traceContext;
         this.traceId = continueTraceId;
-        this.traceId.incrementTraceCount();
-        final Span span = createSpan(continueTraceId);
-        this.callStack = new CallStack(span);
-        latestStackIndex = this.callStack.push();
-        StackFrame stackFrame = createSpanStackFrame(ROOT_STACKID, callStack.getSpan());
-        this.callStack.setStackFrame(stackFrame);
-        this.currentStackFrame = stackFrame;
+        this.sampling = sampling;
+
+        final Span span = createSpan();
+        this.spanRecorder = new DefaultSpanRecorder(traceContext, span, traceId, sampling);
+        this.spanRecorder.recordTraceId(traceId);
+        this.spanEventRecorder = new WrappedSpanEventRecorder(traceContext);
+        if (traceContext.getProfilerConfig() != null) {
+            final int maxCallStackDepth = traceContext.getProfilerConfig().getCallStackMaxDepth();
+            this.callStack = new CallStack(span, maxCallStackDepth);
+        } else {
+            this.callStack = new CallStack(span);
+        }
+        setCurrentThread();
     }
 
-    public CallStack getCallStack() {
-        return callStack;
+    private Span createSpan() {
+        Span span = new Span();
+        span.setAgentId(traceContext.getAgentId());
+        span.setApplicationName(traceContext.getApplicationName());
+        span.setAgentStartTime(traceContext.getAgentStartTime());
+        span.setApplicationServiceType(traceContext.getServerTypeCode());
+        span.markBeforeTime();
+
+        return span;
     }
 
     public void setStorage(Storage storage) {
         this.storage = storage;
     }
-    
-    public Storage getStorage() {
-        return this.storage;
+
+    @Override
+    public SpanEventRecorder traceBlockBegin() {
+        return traceBlockBegin(DEFAULT_STACKID);
     }
 
-    public short nextSequence() {
-        return sequence++;
-    }
-
-    public int getCallStackDepth() {
-        return this.callStack.getIndex();
-    }
-
-
-    private StackFrame createSpanEventStackFrame(int stackId) {
-        SpanEvent spanEvent = new SpanEvent(callStack.getSpan());
-
+    @Override
+    public SpanEventRecorder traceBlockBegin(final int stackId) {
         // Set properties for the case when stackFrame is not used as part of Span.
-        SpanEventStackFrame stackFrame = new SpanEventStackFrame(spanEvent);
-        stackFrame.setStackFrameId(stackId);
-        stackFrame.setSequence(nextSequence());
-        return stackFrame;
-    }
+        final SpanEvent spanEvent = new SpanEvent(spanRecorder.getSpan());
+        spanEvent.markStartTime();
+        spanEvent.setStackId(stackId);
 
-    private StackFrame createSpanStackFrame(int stackId, Span span) {
-        RootStackFrame stackFrame = new RootStackFrame(span);
-        stackFrame.setStackFrameId(stackId);
-        return stackFrame;
-    }
-
-    @Override
-    public void traceBlockBegin() {
-        traceBlockBegin(DEFAULT_STACKID);
-    }
-
-    @Override
-    public void markBeforeTime() {
-        this.currentStackFrame.markBeforeTime();
-    }
-
-    @Override
-    public long getBeforeTime() {
-        return this.currentStackFrame.getBeforeTime();
-    }
-
-    @Override
-    public void markAfterTime() {
-        this.currentStackFrame.markAfterTime();
-    }
-
-    @Override
-    public long getAfterTime() {
-        return this.currentStackFrame.getAfterTime();
-    }
-
-
-    @Override
-    public void traceBlockBegin(final int stackId) {
-        final int currentStackIndex = callStack.push();
-        final StackFrame stackFrame = createSpanEventStackFrame(stackId);
-
-        if (latestStackIndex != currentStackIndex) {
-            latestStackIndex = currentStackIndex;
-            SpanEvent spanEvent = ((SpanEventStackFrame) stackFrame).getSpanEvent();
-            spanEvent.setDepth(latestStackIndex);
+        if (this.closed) {
+            if (isWarn) {
+                PinpointException exception = new PinpointException("already closed trace.");
+                logger.warn("[DefaultTrace] Corrupted call stack found.", exception);
+            }
+        } else {
+            callStack.push(spanEvent);
         }
 
-        callStack.setStackFrame(stackFrame);
-        this.currentStackFrame = stackFrame;
-    }
-
-    @Override
-    public void close() {
-        // TODO STATDISABLE remove stat code for now
-        // metricResponseTime();
-        try {
-            pop(ROOT_STACKID);
-            callStack.popRoot();
-        } catch(Exception e) {
-            logger.warn("Failed to close", e);
-        }
-        
-        // If the stack is not handled properly, NullPointerException will be thrown after this. Is it OK?
-        this.currentStackFrame = null;
-        if(this.storage != null) {
-            this.traceId.decrementTraceCount();
-            this.storage.close();
-            this.storage = null;
-        }
+        spanEventRecorder.setWrapped(spanEvent);
+        return spanEventRecorder;
     }
 
     @Override
@@ -211,64 +145,70 @@ public final class DefaultTrace implements Trace {
         traceBlockEnd(DEFAULT_STACKID);
     }
 
-    private void metricResponseTime() {
-        final Span span = this.getCallStack().getSpan();
-        final boolean isError = span.getErrCode() != 0;
-        final int elapsedTime = this.currentStackFrame.getElapsedTime();
-        final TraceContext traceContext = this.traceContext;
-        if (isError) {
-            traceContext.recordContextMetricIsError();
-        } else {
-            traceContext.recordContextMetric(elapsedTime);
-        }
-        final String parentApplicationName = span.getParentApplicationName();
-        if (parentApplicationName == null) {
-            if (isError) {
-                traceContext.recordUserAcceptResponseTime(HistogramSchema.ERROR_SLOT_TIME);
-            } else {
-                traceContext.recordUserAcceptResponseTime(elapsedTime);
+    @Override
+    public void traceBlockEnd(int stackId) {
+        if (this.closed) {
+            if (isWarn) {
+                final PinpointException exception = new PinpointException("already closed trace.");
+                logger.warn("[DefaultTrace] Corrupted call stack found.", exception);
             }
-        } else {
-            final short parentApplicationType = span.getParentApplicationType();
-            if (isError) {
-                traceContext.recordAcceptResponseTime(parentApplicationName, parentApplicationType, HistogramSchema.ERROR_SLOT_TIME);
-            } else {
-                traceContext.recordAcceptResponseTime(parentApplicationName, parentApplicationType, elapsedTime);
+            return;
+        }
+
+        final SpanEvent spanEvent = callStack.pop();
+        if (spanEvent == null) {
+            if (isWarn) {
+                PinpointException exception = new PinpointException("call stack is empty.");
+                logger.warn("[DefaultTrace] Corrupted call stack found.", exception);
+            }
+            return;
+        }
+
+        if (spanEvent.getStackId() != stackId) {
+            // stack dump will make debugging easy.
+            if (isWarn) {
+                PinpointException exception = new PinpointException("not matched stack id. expected=" + stackId + ", current=" + spanEvent.getStackId());
+                logger.warn("[DefaultTrace] Corrupted call stack found.", exception);
             }
         }
+
+        if (spanEvent.isTimeRecording()) {
+            spanEvent.markAfterTime();
+        }
+        logSpan(spanEvent);
     }
 
     @Override
-    public void traceBlockEnd(int stackId) {
-        pop(stackId);
-        StackFrame popStackFrame = callStack.pop();
-        // When pop, current frame have to be recovered.
-        this.currentStackFrame = popStackFrame;
-    }
+    public void close() {
+        if (closed) {
+            logger.warn("Already closed trace.");
+            return;
+        }
+        closed = true;
 
-    private void pop(int stackId) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        int stackFrameId = currentStackFrame.getStackFrameId();
-        if (stackFrameId != stackId) {
-            // stack dump will make debugging easy.
-            if (logger.isWarnEnabled()) {
-                PinpointException exception = new PinpointException("Corrupted CallStack found");
-                logger.warn("Corrupted CallStack found. StackId not matched. expected:{} current:{}", stackId, stackFrameId, exception);
+        if (!callStack.empty()) {
+            if (isWarn) {
+                PinpointException exception = new PinpointException("not empty call stack.");
+                logger.warn("[DefaultTrace] Corrupted call stack found.", exception);
             }
-        }
-        if (currentStackFrame instanceof RootStackFrame) {
-            logSpan(((RootStackFrame) currentStackFrame).getSpan());
+            // skip
         } else {
-            logSpan(((SpanEventStackFrame) currentStackFrame).getSpanEvent());
+            Span span = spanRecorder.getSpan();
+            if (span.isTimeRecording()) {
+                span.markAfterTime();
+            }
+            logSpan(span);
         }
-    }
 
-    public StackFrame getCurrentStackFrame() {
-        return callStack.getCurrentStackFrame();
+        // If the stack is not handled properly, NullPointerException will be thrown after this. Is it OK?
+        if (this.storage != null) {
+            this.storage.close();
+            this.storage = null;
+        }
     }
 
     /**
-     * Get current TraceID. If it was not set this will return null.                                                         
+     * Get current TraceID. If it was not set this will return null.
      *
      * @return
      */
@@ -276,7 +216,34 @@ public final class DefaultTrace implements Trace {
     public TraceId getTraceId() {
         return this.traceId;
     }
-    
+
+    @Override
+    public long getId() {
+        return traceId.getTransactionSequence();
+    }
+
+    @Override
+    public long getStartTime() {
+        final DefaultSpanRecorder copy = this.spanRecorder;
+        if (copy == null) {
+            return 0;
+        }
+        return copy.getSpan().getStartTime();
+    }
+
+    @Override
+    public Thread getBindThread() {
+        return bindThread;
+    }
+
+    private void setCurrentThread() {
+        this.setBindThread(Thread.currentThread());
+    }
+
+    private void setBindThread(Thread thread) {
+        bindThread = thread;
+    }
+
 
     public boolean canSampled() {
         return this.sampling;
@@ -286,14 +253,10 @@ public final class DefaultTrace implements Trace {
         return getTraceId().isRoot();
     }
 
-    public void setSampling(boolean sampling) {
-        this.sampling = sampling;
-    }
-
     private void logSpan(SpanEvent spanEvent) {
         if (isTrace) {
             final Thread th = Thread.currentThread();
-            logger.trace("[WRITE SpanEvent]{} Thread ID={} Name={}", spanEvent, th.getId(), th.getName());
+            logger.trace("[DefaultTrace] Write {} thread{id={}, name={}}", spanEvent, th.getId(), th.getName());
         }
         this.storage.store(spanEvent);
     }
@@ -301,285 +264,9 @@ public final class DefaultTrace implements Trace {
     private void logSpan(Span span) {
         if (isTrace) {
             final Thread th = Thread.currentThread();
-            logger.trace("[WRITE SpanEvent]{} Thread ID={} Name={}", span, th.getId(), th.getName());
+            logger.trace("[DefaultTrace] Write {} thread{id={}, name={}}", span, th.getId(), th.getName());
         }
         this.storage.store(span);
-    }
-
-    @Override
-    public void recordException(Throwable th) {
-        if (th == null) {
-            return;
-        }
-        final String drop = StringUtils.drop(th.getMessage(), 256);
-        // An exception that is an instance of a proxy class could make something wrong because the class name will vary.
-        final int exceptionId = traceContext.cacheString(th.getClass().getName());
-        this.currentStackFrame.setExceptionInfo(exceptionId, drop);
-
-        final Span span = getCallStack().getSpan();
-        if (!span.isSetErrCode()) {
-            span.setErrCode(1);
-        }
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor) {
-        if (methodDescriptor == null) {
-            return;
-        }
-        if (methodDescriptor.getApiId() == 0) {
-            recordAttribute(AnnotationKey.API, methodDescriptor.getFullName());
-        } else {
-            recordApiId(methodDescriptor.getApiId());
-        }
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor, Object[] args) {
-        // Need to improve the way of storing APIs.                                                                                        
-        recordApi(methodDescriptor);
-        recordArgs(args);
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor, Object args, int index) {
-        recordApi(methodDescriptor);
-        recordSingleArg(args, index);
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor, Object[] args, int start, int end) {
-        recordApi(methodDescriptor);
-        recordArgs(args, start, end);
-    }
-
-    @Override
-    public void recordApiCachedString(MethodDescriptor methodDescriptor, String args, int index) {
-        recordApi(methodDescriptor);
-        recordSingleCachedString(args, index);
-    }
-
-
-    private void recordArgs(Object[] args, int start, int end) {
-        if (args != null) {
-            int max = Math.min(Math.min(args.length, AnnotationKey.MAX_ARGS_SIZE), end);
-            for (int i = start; i < max; i++) {
-                recordAttribute(AnnotationKey.getArgs(i), args[i]);
-            }
-            // TODO How to handle if args length is greater than MAX_ARGS_SIZE?
-        }
-    }
-
-    private void recordSingleArg(Object args, int index) {
-        if (args != null) {
-            recordAttribute(AnnotationKey.getArgs(index), args);
-        }
-    }
-
-    private void recordSingleCachedString(String args, int index) {
-        if (args != null) {
-            int cacheId = traceContext.cacheString(args);
-            recordAttribute(AnnotationKey.getCachedArgs(index), cacheId);
-        }
-    }
-
-    private void recordArgs(Object[] args) {
-        if (args != null) {
-            int max = Math.min(args.length, AnnotationKey.MAX_ARGS_SIZE);
-            for (int i = 0; i < max; i++) {
-                recordAttribute(AnnotationKey.getArgs(i), args[i]);
-            }
-         // TODO How to handle if args length is greater than MAX_ARGS_SIZE?                                                                  
-        }
-    }
-
-
-    @Override
-    public ParsingResult recordSqlInfo(String sql) {
-        if (sql == null) {
-            return null;
-        }
-        ParsingResult parsingResult = traceContext.parseSql(sql);
-        recordSqlParsingResult(parsingResult);
-        return parsingResult;
-    }
-
-    @Override
-    public void recordSqlParsingResult(ParsingResult parsingResult) {
-        recordSqlParsingResult(parsingResult, null);
-    }
-
-    @Override
-    public void recordSqlParsingResult(ParsingResult parsingResult, String bindValue) {
-        if (parsingResult == null) {
-            return;
-        }
-        final boolean isNewCache = traceContext.cacheSql(parsingResult);
-        if (isDebug) {
-            if (isNewCache) {
-                logger.debug("update sql cache. parsingResult:{}", parsingResult);
-            } else {
-                logger.debug("cache hit. parsingResult:{}", parsingResult);
-            }
-        }
-
-//        final String sql = parsingResult.getSql();
-        final TIntStringStringValue tSqlValue = new TIntStringStringValue(parsingResult.getId());
-        final String output = parsingResult.getOutput();
-        if (isNotEmpty(output)) {
-            tSqlValue.setStringValue1(output);
-        }
-        if (isNotEmpty(bindValue)) {
-            tSqlValue.setStringValue2(bindValue);
-        }
-        recordSqlParam(tSqlValue);
-    }
-
-    private static boolean isNotEmpty(final String bindValue) {
-        return bindValue != null && !bindValue.isEmpty();
-    }
-
-    private void recordSqlParam(TIntStringStringValue tIntStringStringValue) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.addAnnotation(new Annotation(AnnotationKey.SQL_ID.getCode(), tIntStringStringValue));
-    }
-
-    @Override
-    public void recordAttribute(final AnnotationKey key, final String value) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.addAnnotation(new Annotation(key.getCode(), value));
-    }
-
-    @Override
-    public void recordAttribute(final AnnotationKey key, final int value) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.addAnnotation(new Annotation(key.getCode(), value));
-    }
-
-    public void recordApiId(final int apiId) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.setApiId(apiId);
-    }
-
-    @Override
-    public void recordAttribute(final AnnotationKey key, final Object value) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.addAnnotation(new Annotation(key.getCode(), value));
-    }
-
-
-    @Override
-    public void recordServiceType(final ServiceType serviceType) {
-        final StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.setServiceType(serviceType.getCode());
-    }
-
-    @Override
-    public void recordRpcName(final String rpc) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.setRpc(rpc);
-
-    }
-
-    @Override
-    public void recordDestinationId(final String destinationId) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if (currentStackFrame instanceof SpanEventStackFrame) {
-            ((SpanEventStackFrame) currentStackFrame).setDestinationId(destinationId);
-        } else {
-            throw new PinpointTraceException("not SpanEventStackFrame");
-        }
-    }
-
-    @Override
-    public void recordEndPoint(final String endPoint) {
-        // TODO Need to unify API                                                                                           
-        StackFrame currentStackFrame = this.currentStackFrame;
-        currentStackFrame.setEndPoint(endPoint);
-    }
-
-    @Override
-    public void recordRemoteAddress(final String remoteAddress) {
-        // TODO Need to unify API
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if (currentStackFrame instanceof RootStackFrame) {
-            ((RootStackFrame) currentStackFrame).setRemoteAddress(remoteAddress);
-        } else {
-            throw new PinpointTraceException("not RootStackFrame");
-        }
-    }
-
-    @Override
-    public void recordNextSpanId(long nextSpanId) {
-        if (nextSpanId == -1) {
-            return;
-        }
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if (currentStackFrame instanceof  SpanEventStackFrame) {
-            ((SpanEventStackFrame) currentStackFrame).setNextSpanId(nextSpanId);
-        } else {
-            throw new PinpointTraceException("not SpanEventStackFrame");
-        }
-    }
-
-    @Override
-    public void recordParentApplication(String parentApplicationName, short parentApplicationType) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if (currentStackFrame instanceof RootStackFrame) {
-            final Span span = ((RootStackFrame) currentStackFrame).getSpan();
-            span.setParentApplicationName(parentApplicationName);
-            span.setParentApplicationType(parentApplicationType);
-            if (isDebug) {
-                logger.debug("ParentApplicationName marked. parentApplicationName={}", parentApplicationName);
-            }
-        } else {
-            throw new PinpointTraceException("not RootStackFrame");
-        }
-    }
-
-    @Override
-    public void recordAcceptorHost(String host) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if (currentStackFrame instanceof RootStackFrame) {
-            Span span = ((RootStackFrame) currentStackFrame).getSpan();
-            span.setAcceptorHost(host); // me
-            if (isDebug) {
-                logger.debug("Acceptor host received. host={}", host);
-            }
-        } else {
-            throw new PinpointTraceException("not RootStackFrame");
-        }
-    }
-
-    @Override
-    public int getStackFrameId() {
-        return this.getCurrentStackFrame().getStackFrameId();
-
-    }
-    
-    @Override
-    public short getServiceType() {
-        return currentStackFrame.getServiceType();
-    }
-
-    @Override
-    public void recordAsyncId(int asyncId) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if(currentStackFrame instanceof SpanEventStackFrame) {
-            ((SpanEventStackFrame) currentStackFrame).setAsyncId(asyncId);
-        } else {
-            throw new PinpointException("not SpanEventStackFrame");
-        }
-    }
-
-    @Override
-    public void recordNextAsyncId(int asyncId) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if(currentStackFrame instanceof SpanEventStackFrame) {
-            ((SpanEventStackFrame) currentStackFrame).setNextAsyncId(asyncId);
-        } else {
-            throw new PinpointException("not SpanEventStackFrame");
-        }
     }
 
     @Override
@@ -588,27 +275,52 @@ public final class DefaultTrace implements Trace {
     }
 
     @Override
-    public long getTraceStartTime() {
-        return callStack.getSpan().getStartTime();
-    }
-
-    @Override
     public boolean isRootStack() {
-        return currentStackFrame != null ? currentStackFrame.getStackFrameId() == ROOT_STACKID : false;
+        return callStack.empty();
     }
 
     @Override
     public AsyncTraceId getAsyncTraceId() {
-        return new DefaultAsyncTraceId(traceId, traceContext.getAsyncId(), getTraceStartTime());
+        return new DefaultAsyncTraceId(traceId, traceContext.getAsyncId(), spanRecorder.getSpan().getStartTime());
     }
 
     @Override
-    public void recordAsyncSequence(short asyncSequence) {
-        StackFrame currentStackFrame = this.currentStackFrame;
-        if(currentStackFrame instanceof SpanEventStackFrame) {
-            ((SpanEventStackFrame) currentStackFrame).setAsyncSequence(asyncSequence);
-        } else {
-            throw new PinpointException("not SpanEventStackFrame");
+    public SpanRecorder getSpanRecorder() {
+        return spanRecorder;
+    }
+
+    @Override
+    public SpanEventRecorder currentSpanEventRecorder() {
+        SpanEvent spanEvent = callStack.peek();
+        if (spanEvent == null) {
+            if (isWarn) {
+                PinpointException exception = new PinpointException("call stack is empty");
+                logger.warn("[DefaultTrace] Corrupted call stack found.", exception);
+            }
+            // make dummy.
+            spanEvent = new SpanEvent(spanRecorder.getSpan());
         }
+
+        spanEventRecorder.setWrapped(spanEvent);
+        return spanEventRecorder;
+    }
+
+    @Override
+    public int getCallStackFrameId() {
+        if (callStack.empty()) {
+            return ROOT_STACKID;
+        }
+
+        final SpanEvent spanEvent = callStack.peek();
+        return spanEvent.getStackId();
+    }
+
+    @Override
+    public TraceType getTraceType() {
+        return this.traceType;
+    }
+
+    public void setTraceType(TraceType traceType) {
+        this.traceType = traceType;
     }
 }

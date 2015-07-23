@@ -19,7 +19,7 @@ package com.navercorp.pinpoint.plugin.thrift.interceptor.client.async;
 import org.apache.thrift.async.TAsyncMethodCall;
 
 import com.navercorp.pinpoint.bootstrap.MetadataAccessor;
-import com.navercorp.pinpoint.bootstrap.context.RecordableTrace;
+import com.navercorp.pinpoint.bootstrap.context.SpanEventRecorder;
 import com.navercorp.pinpoint.bootstrap.context.Trace;
 import com.navercorp.pinpoint.bootstrap.context.TraceContext;
 import com.navercorp.pinpoint.bootstrap.interceptor.MethodDescriptor;
@@ -50,18 +50,18 @@ public class TAsyncMethodCallDoWritingRequestBodyInterceptor extends TAsyncMetho
     }
 
     @Override
-    protected void doInBeforeTrace(RecordableTrace trace, Object target, Object[] args) {
-        super.doInBeforeTrace(trace, target, args);
+    protected void doInBeforeTrace(SpanEventRecorder recorder, Object target, Object[] args) {
+        super.doInBeforeTrace(recorder, target, args);
         
         Long nextSpanId = this.asyncNextSpanIdAccessor.get(target);
-        trace.recordNextSpanId(nextSpanId);
+        recorder.recordNextSpanId(nextSpanId);
         
         String remoteAddress = this.asyncCallRemoteAddressAccessor.get(target);
-        trace.recordDestinationId(remoteAddress);
+        recorder.recordDestinationId(remoteAddress);
         
         String methodUri = ThriftUtils.getAsyncMethodCallName((TAsyncMethodCall<?>)target);
         String thriftUrl = remoteAddress + "/" + methodUri;
-        trace.recordAttribute(THRIFT_URL, thriftUrl);
+        recorder.recordAttribute(THRIFT_URL, thriftUrl);
     }
 
     @Override
@@ -82,7 +82,6 @@ public class TAsyncMethodCallDoWritingRequestBodyInterceptor extends TAsyncMetho
             }
             
             if(trace.isAsync() && trace.isRootStack()) {
-                trace.markAfterTime();
                 trace.close();
                 super.traceContext.removeTraceObject();
             }
@@ -131,5 +130,4 @@ public class TAsyncMethodCallDoWritingRequestBodyInterceptor extends TAsyncMetho
     protected ServiceType getServiceType() {
         return THRIFT_CLIENT;
     }
-
 }

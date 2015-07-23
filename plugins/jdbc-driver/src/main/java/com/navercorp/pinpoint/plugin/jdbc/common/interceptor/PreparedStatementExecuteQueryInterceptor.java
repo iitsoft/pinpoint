@@ -21,6 +21,7 @@ import java.util.Map;
 
 import com.navercorp.pinpoint.bootstrap.MetadataAccessor;
 import com.navercorp.pinpoint.bootstrap.context.DatabaseInfo;
+import com.navercorp.pinpoint.bootstrap.context.SpanEventRecorder;
 import com.navercorp.pinpoint.bootstrap.context.Trace;
 import com.navercorp.pinpoint.bootstrap.context.TraceContext;
 import com.navercorp.pinpoint.bootstrap.interceptor.MethodDescriptor;
@@ -82,14 +83,13 @@ public class PreparedStatementExecuteQueryInterceptor implements SimpleAroundInt
             return;
         }
 
-        trace.traceBlockBegin();
-        trace.markBeforeTime();
+        SpanEventRecorder recorder = trace.traceBlockBegin();
         try {
             DatabaseInfo databaseInfo = databaseInfoAccessor.get(target, UnKnownDatabaseInfo.INSTANCE);
-            trace.recordServiceType(databaseInfo.getExecuteQueryType());
+            recorder.recordServiceType(databaseInfo.getExecuteQueryType());
 
-            trace.recordEndPoint(databaseInfo.getMultipleHost());
-            trace.recordDestinationId(databaseInfo.getDatabaseId());
+            recorder.recordEndPoint(databaseInfo.getMultipleHost());
+            recorder.recordDestinationId(databaseInfo.getDatabaseId());
 
             ParsingResult parsingResult = null;
             if (parsingResultAccessor.isApplicable(target)) {
@@ -101,12 +101,12 @@ public class PreparedStatementExecuteQueryInterceptor implements SimpleAroundInt
             }
             if (bindValue != null) {
                 String bindString = toBindVariable(bindValue);
-                trace.recordSqlParsingResult(parsingResult, bindString);
+                recorder.recordSqlParsingResult(parsingResult, bindString);
             } else {
-                trace.recordSqlParsingResult(parsingResult);
+                recorder.recordSqlParsingResult(parsingResult);
             }
 
-            trace.recordApi(descriptor);
+            recorder.recordApi(descriptor);
 //            trace.recordApi(apiId);
             
             // Need to change where to invoke clean().
@@ -130,17 +130,7 @@ public class PreparedStatementExecuteQueryInterceptor implements SimpleAroundInt
     }
 
     private String toBindVariable(Map<Integer, String> bindValue) {
-        final String[] temp = new String[bindValue.size()];
-        for (Map.Entry<Integer, String> entry : bindValue.entrySet()) {
-            Integer key = entry.getKey() - 1;
-            if (temp.length < key) {
-                continue;
-            }
-            temp[key] = entry.getValue();
-        }
-
-        return BindValueUtils.bindValueToString(temp, maxSqlBindValueLength);
-
+        return BindValueUtils.bindValueToString(bindValue, maxSqlBindValueLength);
     }
 
     @Override
@@ -154,10 +144,11 @@ public class PreparedStatementExecuteQueryInterceptor implements SimpleAroundInt
             return;
         }
 
+        
         try {
+            SpanEventRecorder recorder = trace.currentSpanEventRecorder();
             // TODO Test if it's success. if failed terminate. else calculate resultset fetch too. we'd better make resultset fetch optional.
-            trace.recordException(throwable);
-            trace.markAfterTime();
+            recorder.recordException(throwable);
         } finally {
             trace.traceBlockEnd();
         }

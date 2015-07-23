@@ -22,6 +22,7 @@ import java.util.List;
 import com.navercorp.pinpoint.common.buffer.AutomaticBuffer;
 import com.navercorp.pinpoint.common.buffer.Buffer;
 import com.navercorp.pinpoint.common.buffer.OffsetFixedBuffer;
+import com.navercorp.pinpoint.common.trace.LoggingInfo;
 import com.navercorp.pinpoint.common.trace.ServiceType;
 import com.navercorp.pinpoint.common.util.TransactionId;
 import com.navercorp.pinpoint.common.util.TransactionIdUtils;
@@ -77,6 +78,8 @@ public class SpanBo implements com.navercorp.pinpoint.common.bo.Span {
     
     private String remoteAddr; // optional
 
+    private byte loggingTransactionInfo; //optional
+
     public SpanBo(TSpan span) {
         if (span == null) {
             throw new NullPointerException("span must not be null");
@@ -109,6 +112,8 @@ public class SpanBo implements com.navercorp.pinpoint.common.bo.Span {
         this.errCode = span.getErr();
         
         this.remoteAddr = span.getRemoteAddr();
+        
+        this.loggingTransactionInfo = span.getLoggingTransactionInfo();
         
         // FIXME (2015.03) Legacy - applicationServiceType added in v1.1.0
         // applicationServiceType is not saved for older versions where applicationServiceType does not exist.
@@ -380,6 +385,14 @@ public class SpanBo implements com.navercorp.pinpoint.common.bo.Span {
             return this.serviceType;
         }
     }
+    
+    public byte getLoggingTransactionInfo() {
+        return loggingTransactionInfo;
+    }
+
+    public void setLoggingTransactionInfo(byte loggingTransactionInfo) {
+        this.loggingTransactionInfo = loggingTransactionInfo;
+    }
 
     // Variable encoding has been added in case of write io operation. The data size can be reduced by about 10%.
     public byte[] writeValue() {
@@ -434,6 +447,8 @@ public class SpanBo implements com.navercorp.pinpoint.common.bo.Span {
         } else {
             buffer.put(false);
         }
+        
+        buffer.put(loggingTransactionInfo);
 
         return buffer.getBuffer();
     }
@@ -479,6 +494,10 @@ public class SpanBo implements com.navercorp.pinpoint.common.bo.Span {
             if (this.hasApplicationServiceType) {
                 this.applicationServiceType = buffer.readShort();
             }
+        }
+        
+        if (buffer.limit() > 0) {
+            this.loggingTransactionInfo = buffer.readByte();
         }
 
         return buffer.getOffset();

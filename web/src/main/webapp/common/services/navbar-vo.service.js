@@ -1,6 +1,12 @@
 (function() {
 	'use strict';
-	
+	/**
+	 * (en)NavbarVoService 
+	 * @ko NavbarVoService
+	 * @group Service
+	 * @name NavbarVoService
+	 * @class
+	 */
 	pinpointApp.factory('NavbarVoService', function () {
 	    return function () {
 	        // define and initialize private variables;
@@ -17,8 +23,8 @@
 	        this._sReadablePeriod = false;
 	        this._sQueryEndDateTime = false;
 	        
-	        this._nCallerRange = false;
-	        this._nCalleeRange = false;
+	        this._nCallerRange = 2;
+	        this._nCalleeRange = 2;
 	        
 	        this._sHint = false;
 	

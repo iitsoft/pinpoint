@@ -18,8 +18,11 @@ package com.navercorp.pinpoint.bootstrap.interceptor;
 
 
 import com.navercorp.pinpoint.bootstrap.context.AsyncTraceId;
+import com.navercorp.pinpoint.bootstrap.context.SpanEventRecorder;
+import com.navercorp.pinpoint.bootstrap.context.SpanRecorder;
 import com.navercorp.pinpoint.bootstrap.context.Trace;
 import com.navercorp.pinpoint.bootstrap.context.TraceId;
+import com.navercorp.pinpoint.bootstrap.context.TraceType;
 import com.navercorp.pinpoint.common.trace.AnnotationKey;
 import com.navercorp.pinpoint.common.trace.ServiceType;
 import com.navercorp.pinpoint.common.util.Clock;
@@ -43,23 +46,18 @@ public class MockTrace implements Trace {
     }
 
     @Override
-    public void markBeforeTime() {
-        beforeTime = clock.getTime();
+    public long getId() {
+        return -1;
     }
 
     @Override
-    public long getBeforeTime() {
-        return beforeTime;
+    public long getStartTime() {
+        return 0;
     }
 
     @Override
-    public void markAfterTime() {
-        afterTime = clock.getTime();
-    }
-
-    @Override
-    public long getAfterTime() {
-        return afterTime;
+    public Thread getBindThread() {
+        return null;
     }
 
     @Override
@@ -82,118 +80,13 @@ public class MockTrace implements Trace {
     }
 
     @Override
-    public void recordException(Throwable throwable) {
-
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor) {
-
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor, Object[] args) {
-
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor, Object args, int index) {
-
-    }
-
-    @Override
-    public void recordApi(MethodDescriptor methodDescriptor, Object[] args, int start, int end) {
-
-    }
-
-    @Override
-    public void recordApiCachedString(MethodDescriptor methodDescriptor, String args, int index) {
-
-    }
-
-    @Override
-    public ParsingResult recordSqlInfo(String sql) {
+    public SpanEventRecorder traceBlockBegin() {
         return null;
     }
 
     @Override
-    public void recordSqlParsingResult(ParsingResult parsingResult) {
-
-    }
-
-    @Override
-    public void recordSqlParsingResult(ParsingResult parsingResult, String bindValue) {
-
-    }
-
-    @Override
-    public void recordAttribute(AnnotationKey key, String value) {
-
-    }
-
-    @Override
-    public void recordAttribute(AnnotationKey key, int value) {
-
-    }
-
-    @Override
-    public void recordAttribute(AnnotationKey key, Object value) {
-
-    }
-
-    @Override
-    public void recordServiceType(ServiceType serviceType) {
-
-    }
-
-    @Override
-    public void recordRpcName(String rpc) {
-
-    }
-
-    @Override
-    public void recordDestinationId(String destinationId) {
-
-    }
-
-    @Override
-    public void recordEndPoint(String endPoint) {
-
-    }
-
-    @Override
-    public void recordRemoteAddress(String remoteAddress) {
-
-    }
-
-    @Override
-    public void recordNextSpanId(long spanId) {
-
-    }
-
-    @Override
-    public void recordParentApplication(String parentApplicationName, short parentApplicationType) {
-
-    }
-
-    @Override
-    public void recordAcceptorHost(String host) {
-
-    }
-
-    @Override
-    public int getStackFrameId() {
-        return 0;
-    }
-
-    @Override
-    public void traceBlockBegin() {
-
-    }
-
-    @Override
-    public void traceBlockBegin(int stackId) {
-
+    public SpanEventRecorder traceBlockBegin(int stackId) {
+        return null;
     }
 
     @Override
@@ -207,26 +100,8 @@ public class MockTrace implements Trace {
     }
     
     @Override
-    public short getServiceType() {
-        return ServiceType.UNDEFINED.getCode();
-    }
-
-    @Override
-    public void recordAsyncId(int asyncId) {
-    }
-
-    @Override
-    public void recordNextAsyncId(int asyncId) {
-    }
-
-    @Override
     public boolean isAsync() {
         return false;
-    }
-
-    @Override
-    public long getTraceStartTime() {
-        return 0;
     }
 
     @Override
@@ -244,6 +119,26 @@ public class MockTrace implements Trace {
     }
 
     @Override
-    public void recordAsyncSequence(short sequence) {
+    public SpanRecorder getSpanRecorder() {
+        return null;
+    }
+
+    @Override
+    public SpanEventRecorder currentSpanEventRecorder() {
+        return null;
+    }
+
+    @Override
+    public int getCallStackFrameId() {
+        return 0;
+    }
+
+//    @Override
+//    public void recordLogging(boolean isLogging) {
+//    }
+
+    @Override
+    public TraceType getTraceType() {
+        return TraceType.MOCK;
     }
 }
